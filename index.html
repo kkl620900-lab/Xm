@@ -1,0 +1,388 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+<meta name="theme-color" content="#0a0a0a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>XM</title>
+<style>
+  :root {
+    --bg: #070707; --panel: #0e0e10; --card: #151518; --card2: #1c1c20; --line: #2a2a30;
+    --text: #f2f2f4; --muted: #8b8b95; --red: #e5121e; --red2: #ff3b45; --redglow: rgba(229,18,30,.35);
+    --ok: #3ddc84;
+  }
+  * { box-sizing: border-box; margin: 0; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; background: var(--bg); }
+  body {
+    color: var(--text); font-family: system-ui, -apple-system, "Segoe UI", Tahoma, sans-serif;
+    display: flex; flex-direction: column; overflow: hidden;
+    background:
+      radial-gradient(900px 380px at 50% -120px, rgba(229,18,30,.16), transparent 70%),
+      var(--bg);
+  }
+  /* ---------- الشريط العلوي ---------- */
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 18px; padding-top: calc(14px + env(safe-area-inset-top));
+    border-bottom: 1px solid var(--line); background: rgba(10,10,10,.85); backdrop-filter: blur(10px);
+  }
+  .logo { display: flex; align-items: center; gap: 10px; direction: ltr; }
+  .logo b { font-size: 24px; letter-spacing: 6px; font-weight: 800; }
+  .logo b i { color: var(--red); font-style: normal; text-shadow: 0 0 18px var(--redglow); }
+  .logo .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--red); box-shadow: 0 0 12px var(--red); }
+  .logo small { color: var(--muted); font-size: 11px; letter-spacing: 2px; margin-inline-start: 2px; }
+  .iconbtn { background: var(--card); border: 1px solid var(--line); color: var(--text); width: 38px; height: 38px; border-radius: 12px; font-size: 17px; cursor: pointer; }
+  .iconbtn:active { border-color: var(--red); }
+
+  /* ---------- المحتوى ---------- */
+  main { flex: 1; min-height: 0; position: relative; }
+  section { position: absolute; inset: 0; display: none; flex-direction: column; }
+  section.active { display: flex; }
+  .scroll { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; scroll-behavior: smooth; }
+
+  .msg { max-width: 86%; padding: 11px 15px; border-radius: 18px; line-height: 1.75; white-space: pre-wrap; word-wrap: break-word; font-size: 15.5px; animation: pop .25s ease; }
+  @keyframes pop { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+  .msg.user { align-self: flex-start; background: linear-gradient(135deg, var(--red), #a30b14); color: #fff; border-end-start-radius: 5px; box-shadow: 0 6px 22px rgba(229,18,30,.22); }
+  .msg.bot { align-self: flex-end; background: var(--card); border: 1px solid var(--line); border-end-end-radius: 5px; }
+  .msg.err { background: #2a0c0f; border-color: var(--red); color: #ffc9cd; }
+  .msg img { display: block; width: 100%; max-width: 340px; border-radius: 14px; margin-top: 10px; background: var(--card2); border: 1px solid var(--line); min-height: 120px; }
+  .typing { display: inline-flex; gap: 5px; padding: 4px 0; }
+  .typing span { width: 7px; height: 7px; border-radius: 50%; background: var(--red); animation: blink 1.1s infinite; }
+  .typing span:nth-child(2) { animation-delay: .18s; } .typing span:nth-child(3) { animation-delay: .36s; }
+  @keyframes blink { 0%, 80%, 100% { opacity: .25; transform: scale(.8); } 40% { opacity: 1; transform: scale(1.15); } }
+
+  .hero { margin: auto; text-align: center; padding: 20px; max-width: 420px; }
+  .hero .big { font-size: 64px; font-weight: 800; letter-spacing: 14px; direction: ltr; padding-inline-start: 14px; }
+  .hero .big i { color: var(--red); font-style: normal; text-shadow: 0 0 40px var(--redglow); }
+  .hero p { color: var(--muted); margin-top: 10px; line-height: 1.9; font-size: 14.5px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 18px; }
+  .chip { background: var(--card); border: 1px solid var(--line); color: var(--text); padding: 9px 14px; border-radius: 999px; font-size: 13.5px; cursor: pointer; font-family: inherit; }
+  .chip:active { border-color: var(--red); box-shadow: 0 0 0 3px var(--redglow); }
+
+  /* ---------- شريط الإدخال ---------- */
+  form.bar { display: flex; gap: 8px; padding: 10px 12px; background: rgba(10,10,10,.9); border-top: 1px solid var(--line); }
+  input[type=text], input[type=password], textarea {
+    flex: 1; min-width: 0; background: var(--card); color: var(--text); border: 1px solid var(--line);
+    border-radius: 16px; padding: 13px 16px; font-size: 16px; font-family: inherit; outline: none; transition: border-color .15s, box-shadow .15s;
+  }
+  input:focus { border-color: var(--red); box-shadow: 0 0 0 3px var(--redglow); }
+  input::placeholder { color: #5d5d66; }
+  .send { background: linear-gradient(135deg, var(--red2), var(--red)); color: #fff; border: 0; border-radius: 16px; padding: 0 20px; font-size: 15px; font-weight: 700; cursor: pointer; font-family: inherit; box-shadow: 0 6px 20px rgba(229,18,30,.3); }
+  .send:active { transform: scale(.97); }
+  .send:disabled { opacity: .45; box-shadow: none; }
+  .mic { background: var(--card); color: var(--text); border: 1px solid var(--line); border-radius: 16px; width: 48px; font-size: 18px; cursor: pointer; }
+  .mic.on { background: var(--red); border-color: var(--red); animation: pulse 1s infinite; }
+  @keyframes pulse { 50% { box-shadow: 0 0 0 8px var(--redglow); } }
+
+  /* ---------- المهام ---------- */
+  .task { display: flex; align-items: center; gap: 12px; background: var(--card); border: 1px solid var(--line); padding: 13px 14px; border-radius: 16px; }
+  .task.done { opacity: .55; }
+  .task .t { flex: 1; min-width: 0; line-height: 1.6; }
+  .task.done .t span { text-decoration: line-through; }
+  .task small { display: block; color: var(--muted); font-size: 12px; }
+  .check { appearance: none; width: 24px; height: 24px; border-radius: 8px; border: 2px solid #3a3a42; background: transparent; cursor: pointer; display: grid; place-content: center; flex: none; }
+  .check:checked { background: var(--red); border-color: var(--red); }
+  .check:checked::after { content: "✓"; color: #fff; font-size: 15px; font-weight: 800; }
+  .del { background: transparent; border: 0; color: var(--muted); font-size: 18px; cursor: pointer; padding: 4px 6px; }
+  .del:active { color: var(--red2); }
+  .empty { margin: auto; color: var(--muted); text-align: center; line-height: 2; }
+
+  /* ---------- الصور ---------- */
+  .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .grid img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 16px; background: var(--card); border: 1px solid var(--line); }
+
+  /* ---------- التبويبات السفلية ---------- */
+  nav { display: flex; background: rgba(10,10,10,.95); border-top: 1px solid var(--line); padding: 6px 8px; padding-bottom: calc(6px + env(safe-area-inset-bottom)); }
+  nav button { flex: 1; background: transparent; border: 0; color: var(--muted); padding: 8px 0 6px; font-size: 11.5px; cursor: pointer; font-family: inherit; display: flex; flex-direction: column; align-items: center; gap: 3px; position: relative; }
+  nav button span { font-size: 20px; filter: grayscale(1) brightness(1.3); }
+  nav button.active { color: var(--text); }
+  nav button.active span { filter: none; }
+  nav button.active::before { content: ""; position: absolute; top: -7px; width: 28px; height: 3px; border-radius: 3px; background: var(--red); box-shadow: 0 0 12px var(--red); }
+
+  /* ---------- الإعدادات ---------- */
+  dialog { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 22px; padding: 22px; width: min(92vw, 420px); box-shadow: 0 20px 80px rgba(0,0,0,.8), 0 0 0 1px var(--redglow); }
+  dialog::backdrop { background: rgba(0,0,0,.75); backdrop-filter: blur(3px); }
+  dialog h2 { font-size: 18px; margin-bottom: 6px; }
+  dialog p.sub { color: var(--muted); font-size: 13.5px; line-height: 1.8; margin-bottom: 14px; }
+  label { display: block; font-size: 13px; color: var(--muted); margin: 12px 0 6px; }
+  .row { display: flex; gap: 8px; margin-top: 16px; }
+  .row .send { flex: 1; padding: 13px; }
+  .ghost { background: var(--card); color: var(--text); border: 1px solid var(--line); border-radius: 16px; padding: 13px 16px; font-family: inherit; cursor: pointer; font-size: 14px; }
+  .switch { display: flex; align-items: center; justify-content: space-between; margin-top: 14px; font-size: 14.5px; }
+  .switch input { appearance: none; width: 46px; height: 27px; border-radius: 99px; background: #2a2a30; position: relative; cursor: pointer; transition: .2s; }
+  .switch input::after { content: ""; position: absolute; top: 3px; inset-inline-start: 3px; width: 21px; height: 21px; border-radius: 50%; background: #fff; transition: .2s; }
+  .switch input:checked { background: var(--red); }
+  .switch input:checked::after { inset-inline-start: 22px; }
+  a { color: var(--red2); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo"><span class="dot"></span><b>X<i>M</i></b><small>ASSISTANT</small></div>
+  <button class="iconbtn" id="openSettings" aria-label="الإعدادات">⚙</button>
+</header>
+
+<main>
+  <section id="chat" class="active">
+    <div class="scroll" id="log"></div>
+    <form class="bar" id="form">
+      <button type="button" class="mic" id="mic" aria-label="تحدث">🎤</button>
+      <input type="text" id="input" placeholder="اكتب لـ XM..." autocomplete="off" enterkeyhint="send">
+      <button class="send" id="send">إرسال</button>
+    </form>
+  </section>
+
+  <section id="tasks">
+    <div class="scroll" id="taskList"></div>
+    <form class="bar" id="taskForm">
+      <input type="text" id="taskInput" placeholder="مهمة جديدة..." autocomplete="off">
+      <button class="send">إضافة</button>
+    </form>
+  </section>
+
+  <section id="images">
+    <div class="scroll">
+      <div class="grid" id="imgGrid"></div>
+      <div class="empty" id="imgEmpty">اكتب وصف الصورة بالأسفل<br>الإنجليزية تعطي نتيجة أفضل</div>
+    </div>
+    <form class="bar" id="imgForm">
+      <input type="text" id="imgInput" placeholder="a red sports car in the neon rain" autocomplete="off" dir="ltr">
+      <button class="send">ارسم</button>
+    </form>
+  </section>
+</main>
+
+<nav>
+  <button data-tab="chat" class="active"><span>💬</span>محادثة</button>
+  <button data-tab="tasks"><span>✅</span>المهام</button>
+  <button data-tab="images"><span>🎨</span>صور</button>
+</nav>
+
+<dialog id="settings">
+  <h2>إعدادات XM</h2>
+  <p class="sub">مفتاحك يُحفظ على جهازك فقط ولا يُرسل إلا لخدمة Claude. تجيبه من <a href="https://console.anthropic.com" target="_blank" rel="noopener">console.anthropic.com</a> ← API Keys.</p>
+  <label for="keyInput">مفتاح API</label>
+  <input type="password" id="keyInput" placeholder="sk-ant-..." autocomplete="off" dir="ltr" style="width:100%">
+  <label for="modelInput">النموذج</label>
+  <input type="text" id="modelInput" dir="ltr" style="width:100%">
+  <div class="switch"><span>قراءة الردود بالصوت</span><input type="checkbox" id="voiceOn"></div>
+  <div class="row">
+    <button class="send" id="saveSettings">حفظ</button>
+    <button class="ghost" id="clearAll" type="button">مسح المحادثة</button>
+    <button class="ghost" id="closeSettings" type="button">إغلاق</button>
+  </div>
+</dialog>
+
+<script>
+/* ============================================================
+   XM - مساعد شخصي. يعمل بالكامل داخل المتصفح بدون سيرفر.
+   المفتاح والمهام والمحادثة تُحفظ على جهازك (localStorage).
+   ============================================================ */
+const $ = (s) => document.querySelector(s);
+const store = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} },
+};
+const cfg = { key: store.get('xm_key', ''), model: store.get('xm_model', 'claude-sonnet-5-5'), voice: store.get('xm_voice', false) };
+let tasks  = store.get('xm_tasks', []);
+let chat   = store.get('xm_chat', []);      // [{role, text, images}] للعرض والحفظ
+let images = store.get('xm_images', []);
+let busy = false;
+
+const SYSTEM = [
+  'أنت XM، مساعد شخصي ذكي وأنيق وسريع. تتكلم بنفس لغة ولهجة المستخدم.',
+  'تساعده في الأسئلة وإدارة مهامه وتوليد الصور. ردودك قصيرة ومباشرة وودودة.',
+  'للمهام استخدم الأدوات (add_task, list_tasks, set_task_done, delete_task). للصور استخدم generate_image بوصف إنجليزي مفصل.',
+  'إذا سُئلت عن النموذج الذي يشغلك فقل بصدق إنك XM مبني على نموذج Claude من Anthropic.',
+].join(' ');
+
+const TOOLS = [
+  { name: 'add_task', description: 'إضافة مهمة جديدة.', input_schema: { type: 'object', properties: { title: { type: 'string' }, due: { type: 'string', description: 'الموعد إن وُجد' } }, required: ['title'] } },
+  { name: 'list_tasks', description: 'عرض كل المهام وحالتها.', input_schema: { type: 'object', properties: {} } },
+  { name: 'set_task_done', description: 'تحديد مهمة كمنجزة أو إرجاعها.', input_schema: { type: 'object', properties: { task_id: { type: 'string' }, done: { type: 'boolean' } }, required: ['task_id'] } },
+  { name: 'delete_task', description: 'حذف مهمة.', input_schema: { type: 'object', properties: { task_id: { type: 'string' } }, required: ['task_id'] } },
+  { name: 'generate_image', description: 'توليد صورة. اكتب الوصف بالإنجليزية وبتفصيل.', input_schema: { type: 'object', properties: { prompt: { type: 'string' } }, required: ['prompt'] } },
+];
+
+/* ---------- المهام ---------- */
+const uid = () => Math.random().toString(36).slice(2, 8);
+const saveTasks = () => { store.set('xm_tasks', tasks); renderTasks(); };
+function imageUrl(prompt) {
+  return 'https://image.pollinations.ai/prompt/' + encodeURIComponent(prompt) + '?width=768&height=768&nologo=true&seed=' + Math.floor(Math.random() * 1e6);
+}
+function runTool(name, a, imgsOut) {
+  if (name === 'add_task') { const t = { id: uid(), title: a.title, due: a.due || '', done: false }; tasks.push(t); saveTasks(); return t; }
+  if (name === 'list_tasks') return tasks;
+  if (name === 'set_task_done') { const t = tasks.find((x) => x.id === a.task_id); if (!t) return { error: 'المهمة غير موجودة' }; t.done = a.done !== false; saveTasks(); return t; }
+  if (name === 'delete_task') { const n = tasks.length; tasks = tasks.filter((x) => x.id !== a.task_id); saveTasks(); return { deleted: n !== tasks.length }; }
+  if (name === 'generate_image') { const u = imageUrl(a.prompt); imgsOut.push(u); return { status: 'ok', note: 'الصورة تظهر للمستخدم تلقائياً.' }; }
+  return { error: 'أداة غير معروفة' };
+}
+
+/* ---------- الاتصال بـ Claude مباشرة ---------- */
+async function callClaude(messages) {
+  const r = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'x-api-key': cfg.key,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true',
+    },
+    body: JSON.stringify({ model: cfg.model, max_tokens: 1024, system: SYSTEM, tools: TOOLS, messages }),
+  });
+  if (!r.ok) {
+    let m = ''; try { m = (await r.json()).error?.message; } catch (e) {}
+    const hints = { 401: 'المفتاح غير صحيح. راجعه من الإعدادات ⚙', 429: 'وصلت للحد المسموح. انتظر قليلاً.', 529: 'الخدمة مشغولة، جرب بعد لحظات.' };
+    throw new Error(hints[r.status] || m || ('خطأ ' + r.status));
+  }
+  return r.json();
+}
+
+async function ask(userText) {
+  // نبني الرسائل من المحادثة المحفوظة (نصوص فقط) + أدوات داخل هذه الجولة
+  const messages = chat.filter((m) => m.text && !m.err).slice(-20).map((m) => ({ role: m.role === 'user' ? 'user' : 'assistant', content: m.text }));
+  while (messages.length && messages[0].role !== 'user') messages.shift(); // لازم تبدأ برسالة مستخدم
+  const imgs = [];
+  for (let i = 0; i < 6; i++) {
+    const resp = await callClaude(messages);
+    if (resp.stop_reason !== 'tool_use') {
+      return { text: resp.content.filter((b) => b.type === 'text').map((b) => b.text).join(''), imgs };
+    }
+    messages.push({ role: 'assistant', content: resp.content });
+    const results = resp.content.filter((b) => b.type === 'tool_use').map((b) => ({
+      type: 'tool_result', tool_use_id: b.id, content: JSON.stringify(runTool(b.name, b.input || {}, imgs)),
+    }));
+    messages.push({ role: 'user', content: results });
+  }
+  return { text: 'ما قدرت أكمل الطلب، جرب تعيد صياغته.', imgs };
+}
+
+/* ---------- الواجهة: المحادثة ---------- */
+const log = $('#log'), input = $('#input'), sendBtn = $('#send');
+function bubble(m) {
+  const d = document.createElement('div');
+  d.className = 'msg ' + (m.role === 'user' ? 'user' : 'bot') + (m.err ? ' err' : '');
+  d.textContent = m.text;
+  (m.images || []).forEach((u) => { const i = document.createElement('img'); i.src = u; i.alt = 'صورة'; i.loading = 'lazy'; i.onerror = () => { i.replaceWith(Object.assign(document.createElement('small'), { textContent: 'تعذر تحميل الصورة، جرب تطلبها مرة ثانية.' })); }; d.appendChild(i); });
+  return d;
+}
+function renderChat() {
+  log.innerHTML = '';
+  if (!chat.length) {
+    log.innerHTML = `<div class="hero"><div class="big">X<i>M</i></div>
+      <p>مساعدك الشخصي. اسألني، اطلب مني أدير مهامك، أو أرسم لك صورة.</p>
+      <div class="chips">
+        <button class="chip" data-q="ضيف مهمة: أشتري خبز اليوم">ضيف مهمة</button>
+        <button class="chip" data-q="شنو مهامي؟">شنو مهامي؟</button>
+        <button class="chip" data-q="ارسم لي سيارة رياضية حمراء بالليل تحت المطر">ارسم سيارة</button>
+        <button class="chip" data-q="اشرح لي الذكاء الاصطناعي ببساطة">اشرح لي</button>
+      </div></div>`;
+    log.querySelectorAll('.chip').forEach((c) => c.onclick = () => send(c.dataset.q));
+    return;
+  }
+  chat.forEach((m) => log.appendChild(bubble(m)));
+  log.scrollTop = log.scrollHeight;
+}
+async function send(text) {
+  text = (text || '').trim();
+  if (!text || busy) return;
+  if (!cfg.key) { openSettings(true); return; }
+  busy = true; sendBtn.disabled = true; input.value = '';
+  chat.push({ role: 'user', text }); renderChat();
+  const wait = document.createElement('div'); wait.className = 'msg bot';
+  wait.innerHTML = '<span class="typing"><span></span><span></span><span></span></span>';
+  log.appendChild(wait); log.scrollTop = log.scrollHeight;
+  try {
+    const { text: reply, imgs } = await ask(text);
+    chat.push({ role: 'assistant', text: reply || '(تم)', images: imgs });
+    imgs.forEach((u) => { images.unshift(u); });
+    store.set('xm_images', images.slice(0, 30)); renderImages();
+    speak(reply);
+  } catch (e) {
+    chat.push({ role: 'assistant', text: e.message || String(e), err: true });
+  } finally {
+    chat = chat.slice(-60); store.set('xm_chat', chat.filter((m) => !m.err));
+    busy = false; sendBtn.disabled = false; renderChat(); input.focus();
+  }
+}
+$('#form').onsubmit = (e) => { e.preventDefault(); send(input.value); };
+
+/* ---------- الواجهة: المهام ---------- */
+function renderTasks() {
+  const box = $('#taskList'); box.innerHTML = '';
+  if (!tasks.length) { box.innerHTML = '<div class="empty">ما في مهام بعد<br>أضف مهمة بالأسفل أو قل لـ XM يضيفها</div>'; return; }
+  tasks.forEach((t) => {
+    const d = document.createElement('div'); d.className = 'task' + (t.done ? ' done' : '');
+    d.innerHTML = '<input type="checkbox" class="check"><div class="t"><span></span><small></small></div><button class="del" aria-label="حذف">✕</button>';
+    d.querySelector('span').textContent = t.title;
+    d.querySelector('small').textContent = t.due || '';
+    const cb = d.querySelector('.check'); cb.checked = t.done;
+    cb.onchange = () => { t.done = cb.checked; saveTasks(); };
+    d.querySelector('.del').onclick = () => { tasks = tasks.filter((x) => x.id !== t.id); saveTasks(); };
+    box.appendChild(d);
+  });
+}
+$('#taskForm').onsubmit = (e) => {
+  e.preventDefault(); const v = $('#taskInput').value.trim(); if (!v) return;
+  tasks.push({ id: uid(), title: v, due: '', done: false }); $('#taskInput').value = ''; saveTasks();
+};
+
+/* ---------- الواجهة: الصور ---------- */
+function renderImages() {
+  const g = $('#imgGrid'); g.innerHTML = '';
+  $('#imgEmpty').style.display = images.length ? 'none' : '';
+  images.forEach((u) => { const i = document.createElement('img'); i.src = u; i.loading = 'lazy'; i.alt = 'صورة'; i.onerror = () => { i.style.visibility = 'hidden'; }; g.appendChild(i); });
+}
+$('#imgForm').onsubmit = (e) => {
+  e.preventDefault(); const v = $('#imgInput').value.trim(); if (!v) return;
+  images.unshift(imageUrl(v)); store.set('xm_images', images.slice(0, 30)); $('#imgInput').value = ''; renderImages();
+};
+
+/* ---------- التبويبات ---------- */
+document.querySelectorAll('nav button').forEach((b) => b.onclick = () => {
+  document.querySelectorAll('nav button').forEach((x) => x.classList.toggle('active', x === b));
+  document.querySelectorAll('section').forEach((s) => s.classList.toggle('active', s.id === b.dataset.tab));
+});
+
+/* ---------- الصوت (من المتصفح) ---------- */
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition, mic = $('#mic');
+if (SR) {
+  const rec = new SR(); rec.lang = 'ar-SA'; rec.interimResults = false;
+  rec.onresult = (e) => send(e.results[0][0].transcript);
+  rec.onend = () => mic.classList.remove('on'); rec.onerror = () => mic.classList.remove('on');
+  mic.onclick = () => { try { mic.classList.add('on'); rec.start(); } catch (e) { mic.classList.remove('on'); } };
+} else mic.style.display = 'none';
+function speak(t) {
+  if (!cfg.voice || !t || !('speechSynthesis' in window)) return;
+  const u = new SpeechSynthesisUtterance(t); u.lang = 'ar-SA'; speechSynthesis.cancel(); speechSynthesis.speak(u);
+}
+
+/* ---------- الإعدادات ---------- */
+const dlg = $('#settings');
+function openSettings(needKey) {
+  $('#keyInput').value = cfg.key; $('#modelInput').value = cfg.model; $('#voiceOn').checked = cfg.voice;
+  if (!dlg.open) dlg.showModal();
+  if (needKey) $('#keyInput').focus();
+}
+$('#openSettings').onclick = () => openSettings();
+$('#closeSettings').onclick = () => dlg.close();
+$('#saveSettings').onclick = () => {
+  cfg.key = $('#keyInput').value.trim(); cfg.model = $('#modelInput').value.trim() || 'claude-sonnet-5-5'; cfg.voice = $('#voiceOn').checked;
+  store.set('xm_key', cfg.key); store.set('xm_model', cfg.model); store.set('xm_voice', cfg.voice); dlg.close();
+};
+$('#clearAll').onclick = () => { chat = []; store.set('xm_chat', []); renderChat(); dlg.close(); };
+
+/* ---------- تشغيل ---------- */
+renderChat(); renderTasks(); renderImages();
+if (!cfg.key) setTimeout(() => openSettings(true), 400);
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => {});
+</script>
+</body>
+</html>
