@@ -66,11 +66,12 @@
 
   /* ---------- شريط الإدخال ---------- */
   form.bar { display: flex; gap: 8px; padding: 10px 12px; background: rgba(10,10,10,.9); border-top: 1px solid var(--line); }
-  input[type=text], input[type=password], textarea {
+  input[type=text], input[type=password], textarea, select {
     flex: 1; min-width: 0; background: var(--card); color: var(--text); border: 1px solid var(--line);
     border-radius: 16px; padding: 13px 16px; font-size: 16px; font-family: inherit; outline: none; transition: border-color .15s, box-shadow .15s;
   }
-  input:focus { border-color: var(--red); box-shadow: 0 0 0 3px var(--redglow); }
+  input:focus, select:focus { border-color: var(--red); box-shadow: 0 0 0 3px var(--redglow); }
+  select { width: 100%; color-scheme: dark; }
   input::placeholder { color: #5d5d66; }
   .send { background: linear-gradient(135deg, var(--red2), var(--red)); color: #fff; border: 0; border-radius: 16px; padding: 0 20px; font-size: 15px; font-weight: 700; cursor: pointer; font-family: inherit; box-shadow: 0 6px 20px rgba(229,18,30,.3); }
   .send:active { transform: scale(.97); }
@@ -166,9 +167,11 @@
 
 <dialog id="settings">
   <h2>إعدادات XM</h2>
-  <p class="sub">مفتاحك يُحفظ على جهازك فقط ولا يُرسل إلا لخدمة Claude. تجيبه من <a href="https://console.anthropic.com" target="_blank" rel="noopener">console.anthropic.com</a> ← API Keys.</p>
+  <label for="provSel">مزود الذكاء</label>
+  <select id="provSel"><option value="gemini">Gemini (مجاني)</option><option value="claude">Claude (مدفوع)</option></select>
+  <p class="sub" id="provHelp" style="margin:10px 0 0"></p>
   <label for="keyInput">مفتاح API</label>
-  <input type="password" id="keyInput" placeholder="sk-ant-..." autocomplete="off" dir="ltr" style="width:100%">
+  <input type="password" id="keyInput" placeholder="الصق المفتاح هنا" autocomplete="off" dir="ltr" style="width:100%">
   <label for="modelInput">النموذج</label>
   <input type="text" id="modelInput" dir="ltr" style="width:100%">
   <div class="switch"><span>قراءة الردود بالصوت</span><input type="checkbox" id="voiceOn"></div>
@@ -189,7 +192,19 @@ const store = {
   get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} },
 };
-const cfg = { key: store.get('xm_key', ''), model: store.get('xm_model', 'claude-sonnet-5-5'), voice: store.get('xm_voice', false) };
+const PROVIDERS = {
+  gemini: { name: 'Gemini', maker: 'Google', model: 'gemini-2.5-flash' },
+  claude: { name: 'Claude', maker: 'Anthropic', model: 'claude-sonnet-5-5' },
+};
+const cfg = {
+  provider: store.get('xm_provider', 'gemini'),
+  keys: store.get('xm_keys', {}),
+  models: store.get('xm_models', {}),
+  voice: store.get('xm_voice', false),
+};
+if (!PROVIDERS[cfg.provider]) cfg.provider = 'gemini';
+const curKey = () => String(cfg.keys[cfg.provider] || '').trim();
+const curModel = () => String(cfg.models[cfg.provider] || PROVIDERS[cfg.provider].model).replace(/^models\//, '');
 let tasks  = store.get('xm_tasks', []);
 let chat   = store.get('xm_chat', []);      // [{role, text, images}] للعرض والحفظ
 let images = store.get('xm_images', []);
@@ -199,8 +214,8 @@ const SYSTEM = [
   'أنت XM، مساعد شخصي ذكي وأنيق وسريع. تتكلم بنفس لغة ولهجة المستخدم.',
   'تساعده في الأسئلة وإدارة مهامه وتوليد الصور. ردودك قصيرة ومباشرة وودودة.',
   'للمهام استخدم الأدوات (add_task, list_tasks, set_task_done, delete_task). للصور استخدم generate_image بوصف إنجليزي مفصل.',
-  'إذا سُئلت عن النموذج الذي يشغلك فقل بصدق إنك XM مبني على نموذج Claude من Anthropic.',
 ].join(' ');
+const systemText = () => SYSTEM + ' إذا سُئلت عن النموذج الذي يشغلك فقل بصدق إنك XM مبني على نموذج ' + PROVIDERS[cfg.provider].name + ' من ' + PROVIDERS[cfg.provider].maker + '.';
 
 const TOOLS = [
   { name: 'add_task', description: 'إضافة مهمة جديدة.', input_schema: { type: 'object', properties: { title: { type: 'string' }, due: { type: 'string', description: 'الموعد إن وُجد' } }, required: ['title'] } },
@@ -225,43 +240,96 @@ function runTool(name, a, imgsOut) {
   return { error: 'أداة غير معروفة' };
 }
 
-/* ---------- الاتصال بـ Claude مباشرة ---------- */
+/* ---------- الاتصال بالذكاء (Gemini أو Claude مباشرة من المتصفح) ---------- */
+function errText(status, msg) {
+  const h = {
+    400: 'المفتاح أو الطلب غير صحيح. راجع المفتاح من الإعدادات ⚙',
+    401: 'المفتاح غير صحيح. راجعه من الإعدادات ⚙',
+    403: 'المفتاح غير مسموح له، أو الخدمة غير متاحة في منطقتك.',
+    404: 'اسم النموذج غير صحيح. غيّره من الإعدادات ⚙ (جرب gemini-2.5-flash-lite).',
+    429: 'وصلت للحد المسموح حالياً. انتظر دقيقة وجرب مرة ثانية.',
+    500: 'خطأ مؤقت من الخدمة، جرب مرة ثانية.',
+    503: 'الخدمة مشغولة، جرب بعد لحظات.',
+    529: 'الخدمة مشغولة، جرب بعد لحظات.',
+  };
+  const base = h[status] || ('خطأ ' + status);
+  return [400, 403, 404].includes(status) && msg ? base + '\n(' + String(msg).slice(0, 140) + ')' : base;
+}
+async function failFrom(r) {
+  let m = ''; try { m = (await r.json()).error?.message; } catch (e) {}
+  throw new Error(errText(r.status, m));
+}
+
+/* --- Claude --- */
 async function callClaude(messages) {
   const r = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
-      'x-api-key': cfg.key,
+      'x-api-key': curKey(),
       'anthropic-version': '2023-06-01',
       'anthropic-dangerous-direct-browser-access': 'true',
     },
-    body: JSON.stringify({ model: cfg.model, max_tokens: 1024, system: SYSTEM, tools: TOOLS, messages }),
+    body: JSON.stringify({ model: curModel(), max_tokens: 1024, system: systemText(), tools: TOOLS, messages }),
   });
-  if (!r.ok) {
-    let m = ''; try { m = (await r.json()).error?.message; } catch (e) {}
-    const hints = { 401: 'المفتاح غير صحيح. راجعه من الإعدادات ⚙', 429: 'وصلت للحد المسموح. انتظر قليلاً.', 529: 'الخدمة مشغولة، جرب بعد لحظات.' };
-    throw new Error(hints[r.status] || m || ('خطأ ' + r.status));
-  }
+  if (!r.ok) await failFrom(r);
   return r.json();
 }
-
-async function ask(userText) {
-  // نبني الرسائل من المحادثة المحفوظة (نصوص فقط) + أدوات داخل هذه الجولة
-  const messages = chat.filter((m) => m.text && !m.err).slice(-20).map((m) => ({ role: m.role === 'user' ? 'user' : 'assistant', content: m.text }));
-  while (messages.length && messages[0].role !== 'user') messages.shift(); // لازم تبدأ برسالة مستخدم
-  const imgs = [];
+async function askClaude(messages, imgs) {
   for (let i = 0; i < 6; i++) {
     const resp = await callClaude(messages);
-    if (resp.stop_reason !== 'tool_use') {
-      return { text: resp.content.filter((b) => b.type === 'text').map((b) => b.text).join(''), imgs };
-    }
+    if (resp.stop_reason !== 'tool_use') return resp.content.filter((b) => b.type === 'text').map((b) => b.text).join('');
     messages.push({ role: 'assistant', content: resp.content });
     const results = resp.content.filter((b) => b.type === 'tool_use').map((b) => ({
       type: 'tool_result', tool_use_id: b.id, content: JSON.stringify(runTool(b.name, b.input || {}, imgs)),
     }));
     messages.push({ role: 'user', content: results });
   }
-  return { text: 'ما قدرت أكمل الطلب، جرب تعيد صياغته.', imgs };
+  return 'ما قدرت أكمل الطلب، جرب تعيد صياغته.';
+}
+
+/* --- Gemini --- */
+const GEM_TOOLS = [{ functionDeclarations: TOOLS.map((t) => {
+  const d = { name: t.name, description: t.description };
+  if (Object.keys(t.input_schema.properties || {}).length) d.parameters = t.input_schema; // الدوال بلا معاملات تُترك بدون parameters
+  return d;
+}) }];
+async function callGemini(contents) {
+  const r = await fetch('https://generativelanguage.googleapis.com/v1beta/models/' + encodeURIComponent(curModel()) + ':generateContent', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-goog-api-key': curKey() },
+    body: JSON.stringify({ systemInstruction: { parts: [{ text: systemText() }] }, contents, tools: GEM_TOOLS }),
+  });
+  if (!r.ok) await failFrom(r);
+  return r.json();
+}
+async function askGemini(history, imgs) {
+  const contents = history.map((m) => ({ role: m.role === 'user' ? 'user' : 'model', parts: [{ text: m.content }] }));
+  for (let i = 0; i < 6; i++) {
+    const resp = await callGemini(contents);
+    const cand = resp.candidates && resp.candidates[0];
+    const parts = (cand && cand.content && cand.content.parts) || [];
+    const calls = parts.filter((p) => p.functionCall);
+    if (!calls.length) {
+      const text = parts.filter((p) => p.text && !p.thought).map((p) => p.text).join('');
+      if (text) return text;
+      return (resp.promptFeedback && resp.promptFeedback.blockReason) ? 'ما أقدر أرد على هذا الطلب.' : '(ما وصلني رد، جرب مرة ثانية)';
+    }
+    contents.push({ role: 'model', parts });
+    contents.push({ role: 'user', parts: calls.map((p) => ({
+      functionResponse: { name: p.functionCall.name, response: { result: runTool(p.functionCall.name, p.functionCall.args || {}, imgs) } },
+    })) });
+  }
+  return 'ما قدرت أكمل الطلب، جرب تعيد صياغته.';
+}
+
+async function ask() {
+  // نبني الرسائل من المحادثة المحفوظة (نصوص فقط) + أدوات داخل هذه الجولة
+  const history = chat.filter((m) => m.text && !m.err).slice(-20).map((m) => ({ role: m.role === 'user' ? 'user' : 'assistant', content: m.text }));
+  while (history.length && history[0].role !== 'user') history.shift(); // لازم تبدأ برسالة مستخدم
+  const imgs = [];
+  const text = cfg.provider === 'gemini' ? await askGemini(history, imgs) : await askClaude(history, imgs);
+  return { text, imgs };
 }
 
 /* ---------- الواجهة: المحادثة ---------- */
@@ -293,14 +361,14 @@ function renderChat() {
 async function send(text) {
   text = (text || '').trim();
   if (!text || busy) return;
-  if (!cfg.key) { openSettings(true); return; }
+  if (!curKey()) { openSettings(true); return; }
   busy = true; sendBtn.disabled = true; input.value = '';
   chat.push({ role: 'user', text }); renderChat();
   const wait = document.createElement('div'); wait.className = 'msg bot';
   wait.innerHTML = '<span class="typing"><span></span><span></span><span></span></span>';
   log.appendChild(wait); log.scrollTop = log.scrollHeight;
   try {
-    const { text: reply, imgs } = await ask(text);
+    const { text: reply, imgs } = await ask();
     chat.push({ role: 'assistant', text: reply || '(تم)', images: imgs });
     imgs.forEach((u) => { images.unshift(u); });
     store.set('xm_images', images.slice(0, 30)); renderImages();
@@ -365,23 +433,36 @@ function speak(t) {
 }
 
 /* ---------- الإعدادات ---------- */
-const dlg = $('#settings');
+const dlg = $('#settings'), provSel = $('#provSel');
+let shown = cfg.provider;   // المزود المعروض حالياً في النافذة
+function fillSettings(p) {
+  $('#keyInput').value = cfg.keys[p] || '';
+  $('#modelInput').value = cfg.models[p] || PROVIDERS[p].model;
+  $('#provHelp').innerHTML = 'مفتاحك يُحفظ على جهازك فقط. ' + (p === 'gemini'
+    ? 'جيبه مجاناً من <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener">aistudio.google.com</a>.'
+    : 'جيبه من <a href="https://console.anthropic.com" target="_blank" rel="noopener">console.anthropic.com</a> (يحتاج رصيد مدفوع).');
+}
 function openSettings(needKey) {
-  $('#keyInput').value = cfg.key; $('#modelInput').value = cfg.model; $('#voiceOn').checked = cfg.voice;
+  shown = cfg.provider; provSel.value = shown; fillSettings(shown); $('#voiceOn').checked = cfg.voice;
   if (!dlg.open) dlg.showModal();
   if (needKey) $('#keyInput').focus();
 }
+provSel.onchange = () => {
+  cfg.keys[shown] = $('#keyInput').value.trim(); cfg.models[shown] = $('#modelInput').value.trim();   // نحفظ مؤقتاً ما كُتب قبل التبديل
+  shown = provSel.value; fillSettings(shown);
+};
 $('#openSettings').onclick = () => openSettings();
 $('#closeSettings').onclick = () => dlg.close();
 $('#saveSettings').onclick = () => {
-  cfg.key = $('#keyInput').value.trim(); cfg.model = $('#modelInput').value.trim() || 'claude-sonnet-5-5'; cfg.voice = $('#voiceOn').checked;
-  store.set('xm_key', cfg.key); store.set('xm_model', cfg.model); store.set('xm_voice', cfg.voice); dlg.close();
+  cfg.keys[shown] = $('#keyInput').value.trim(); cfg.models[shown] = $('#modelInput').value.trim() || PROVIDERS[shown].model;
+  cfg.provider = shown; cfg.voice = $('#voiceOn').checked;
+  store.set('xm_provider', cfg.provider); store.set('xm_keys', cfg.keys); store.set('xm_models', cfg.models); store.set('xm_voice', cfg.voice); dlg.close();
 };
 $('#clearAll').onclick = () => { chat = []; store.set('xm_chat', []); renderChat(); dlg.close(); };
 
 /* ---------- تشغيل ---------- */
 renderChat(); renderTasks(); renderImages();
-if (!cfg.key) setTimeout(() => openSettings(true), 400);
+if (!curKey()) setTimeout(() => openSettings(true), 400);
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => {});
 </script>
 </body>
